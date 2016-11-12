@@ -24,6 +24,11 @@ before_cache:
   - rm -fv $HOME/.cabal/packages/hackage.haskell.org/01-index.tar
   - rm -fv $HOME/.cabal/packages/hackage.haskell.org/01-index.tar.idx
 
+addons:
+  apt:
+    packages:
+      - libgirepository1.0-dev
+
 matrix:
   include:
     - compiler: "ghc-7.8.4"
@@ -39,7 +44,6 @@ matrix:
 before_install:
  - HC=${CC}
  - unset CC
- - travis_retry sudo apt-get install -y libgirepository1.0-dev libwebkitgtk-3.0-dev libwebkit2gtk-3.0-dev libpoppler-glib-dev libvte-2.90-dev libgtksourceview-3.0-dev libgstreamer1.0-dev
  - PATH=/opt/ghc/bin:/opt/ghc-ppa-tools/bin:$PATH
  - PKGNAME='haskell-gi'
 
