@@ -15,7 +15,9 @@ import Prelude hiding (takeWhile)
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>), (<*))
 #endif
+#if !MIN_VERSION_base(4,13,0)
 import Data.Monoid ((<>))
+#endif
 import Control.Applicative ((<|>))
 
 import Data.Attoparsec.Text
@@ -25,6 +27,7 @@ import Data.Text (Text)
 
 -- | A parsed gtk-doc token.
 data Token = Literal Text
+           | Comment Text
            | Verbatim Text
            | CodeBlock (Maybe Language) Text
            | ExternalLink Link
@@ -54,6 +57,7 @@ data CRef = FunctionRef Text
           | ParamRef Text
           | ConstantRef Text
           | SignalRef Text Text
+          | LocalSignalRef Text
           | PropertyRef Text Text
           | VMethodRef Text Text
           | StructFieldRef Text Text
@@ -81,6 +85,9 @@ newtype GtkDoc = GtkDoc [Token]
 --
 -- >>> parseGtkDoc "Call foo() for free cookies"
 -- GtkDoc [Literal "Call ",SymbolRef (FunctionRef "foo"),Literal " for free cookies"]
+--
+-- >>> parseGtkDoc "The signal ::activate is related to gtk_button_activate()."
+-- GtkDoc [Literal "The signal ",SymbolRef (LocalSignalRef "activate"),Literal " is related to ",SymbolRef (FunctionRef "gtk_button_activate"),Literal "."]
 --
 -- >>> parseGtkDoc "The signal ##%#GtkButton::activate is related to gtk_button_activate()."
 -- GtkDoc [Literal "The signal ##%",SymbolRef (SignalRef "GtkButton" "activate"),Literal " is related to ",SymbolRef (FunctionRef "gtk_button_activate"),Literal "."]
@@ -167,6 +174,7 @@ parseToken = -- Note that the parsers overlap, so this is not as
              -- backtracking.
                  parseFunctionRef
              <|> parseSignal
+             <|> parseLocalSignal
              <|> parseProperty
              <|> parseVMethod
              <|> parseStructField
@@ -180,6 +188,7 @@ parseToken = -- Note that the parsers overlap, so this is not as
              <|> parseImage
              <|> parseSectionHeader
              <|> parseList
+             <|> parseComment
              <|> parseBoringLiteral
 
 -- | Parse a signal name, of the form
@@ -196,6 +205,18 @@ parseSignal = do
   signal <- signalOrPropName
   return (SymbolRef (SignalRef obj signal))
 
+-- | Parse a reference to a signal defined in the current module, of the form
+-- > ::signal
+--
+-- === __Examples__
+-- >>> parseOnly (parseLocalSignal <* endOfInput) "::activate"
+-- Right (SymbolRef (LocalSignalRef "activate"))
+parseLocalSignal :: Parser Token
+parseLocalSignal = do
+  _ <- string "::"
+  signal <- signalOrPropName
+  return (SymbolRef (LocalSignalRef signal))
+
 -- | Parse a property name, of the form
 -- > #Object:property
 --
@@ -209,6 +230,18 @@ parseProperty = do
   _ <- char ':'
   property <- signalOrPropName
   return (SymbolRef (PropertyRef obj property))
+
+-- | Parse an xml comment, of the form
+-- > <!-- comment -->
+-- Note that this function keeps spaces.
+--
+-- === __Examples__
+-- >>> parseOnly (parseComment <* endOfInput) "<!-- comment -->"
+-- Right (Comment " comment ")
+parseComment :: Parser Token
+parseComment = do
+  comment <- string "<!--" *> manyTill anyChar (string "-->")
+  return (Comment $ T.pack comment)
 
 -- | Parse a reference to a virtual method, of the form
 -- > #Struct.method()
@@ -338,6 +371,7 @@ special '|' = True
 special '[' = True
 special '!' = True
 special '\n' = True
+special ':' = True
 special c = isCIdent c
 
 -- | Parse a verbatim string, of the form

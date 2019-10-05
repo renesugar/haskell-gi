@@ -75,7 +75,9 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import qualified Data.Foldable as F
 import Data.Maybe (fromMaybe, catMaybes)
+#if !MIN_VERSION_base(4,13,0)
 import Data.Monoid ((<>), mempty)
+#endif
 import qualified Data.Map.Strict as M
 import Data.Sequence (ViewL ((:<)), viewl, (|>))
 import qualified Data.Sequence as Seq
@@ -606,7 +608,7 @@ data CPPGuard = CPPOverloading -- ^ Enable overloading
 -- | Guard a code block with CPP code, such that it is included only
 -- if the specified feature is enabled.
 cppIf :: CPPGuard -> BaseCodeGen e a -> BaseCodeGen e a
-cppIf CPPOverloading = cppIfBlock "ENABLE_OVERLOADING"
+cppIf CPPOverloading = cppIfBlock "defined(ENABLE_OVERLOADING)"
 
 -- | Write the given code into the .hs-boot file for the current module.
 hsBoot :: BaseCodeGen e a -> BaseCodeGen e a
@@ -786,7 +788,7 @@ formatSection section exports =
                                                    " #" <> anchor <> "#"
                                     Nothing -> subsectionTitle subsec
                     , case subsectionDoc subsec of
-                        Just text -> "{- | " <> text  <> "\n-}"
+                        Just text -> formatHaddockComment text
                         Nothing -> ""
                     , ( T.concat
                       . map (formatExport exportSymbol)
@@ -829,10 +831,10 @@ ghcOptions opts = "{-# OPTIONS_GHC " <> T.intercalate ", " opts <> " #-}\n"
 
 -- | Generate some convenience CPP macros.
 cppMacros :: Text
-cppMacros = T.unlines ["#define ENABLE_OVERLOADING (MIN_VERSION_haskell_gi_overloading(1,0,0) \\"
-                      -- Haddocks look better without overloading
-                      , "       && !defined(__HADDOCK_VERSION__))"
-                      ]
+cppMacros = T.unlines
+  ["#if (MIN_VERSION_haskell_gi_overloading(1,0,0) && !defined(__HADDOCK_VERSION__))"
+  , "#define ENABLE_OVERLOADING"
+  , "#endif"]
 
 -- | Standard fields for every module.
 standardFields :: Text
@@ -842,9 +844,17 @@ standardFields = T.unlines [ "Copyright  : " <> authors
 
 -- | The haddock header for the module, including optionally a description.
 moduleHaddock :: Maybe Text -> Text
-moduleHaddock Nothing = T.unlines ["{- |", standardFields <> "-}"]
-moduleHaddock (Just description) = T.unlines ["{- |", standardFields,
-                                              description, "-}"]
+moduleHaddock Nothing = formatHaddockComment $ standardFields
+moduleHaddock (Just description) =
+  formatHaddockComment $ T.unlines [standardFields, description]
+
+-- | Format the comment with the module documentation.
+formatHaddockComment :: Text -> Text
+formatHaddockComment doc = let lines = case T.lines doc of
+                                 [] -> []
+                                 (first:rest) -> ("-- | " <> first) :
+                                                 map ("-- " <>) rest
+                          in T.unlines lines
 
 -- | Generic module prelude. We reexport all of the submodules.
 modulePrelude :: M.Map HaddockSection Text -> Text -> [Export] -> [Text] -> Text
@@ -901,6 +911,7 @@ moduleImports = T.unlines [
                 , "import qualified Data.GI.Base.CallStack as B.CallStack"
                 , "import qualified Data.GI.Base.Properties as B.Properties"
                 , "import qualified Data.GI.Base.Signals as B.Signals"
+                , "import qualified Control.Monad.IO.Class as MIO"
                 , "import qualified Data.Text as T"
                 , "import qualified Data.ByteString.Char8 as B"
                 , "import qualified Data.Map as Map"

@@ -1,45 +1,51 @@
 sudo: true
-dist: xenial
-language: haskell
+language: c
 
 cache:
   directories:
   - "$HOME/.cabal/store"
 
-env:
- - CABALVER=2.2 GHCVER=8.0.2
- - CABALVER=2.2 GHCVER=8.4.1
- - CABALVER=2.4 GHCVER=8.6.1
+matrix:
+  include:
+  - os: linux
+    dist: xenial
+    env: CABALVER=2.2 GHCVER=8.0.2
+  - os: linux
+    dist: xenial
+    env: CABALVER=2.2 GHCVER=8.4.1
+  - os: linux
+    dist: xenial
+    env: CABALVER=2.4 GHCVER=8.6.1
+  - os: osx
+    osx_image: xcode11
 
 before_install:
- - travis_retry sudo add-apt-repository -y ppa:webkit-team/ppa
- - travis_retry sudo add-apt-repository -y ppa:hvr/ghc
- - travis_retry sudo add-apt-repository -y ppa:gnome3-team/gnome3-staging
- - travis_retry sudo add-apt-repository -y ppa:gnome3-team/gnome3
- - travis_retry sudo apt-get update
- - travis_retry sudo apt-get install -y libgtk-3-0
- - travis_retry sudo apt-get install -y cabal-install-$CABALVER ghc-$GHCVER happy-1.19.5 alex-3.1.7
- - travis_retry sudo apt-get install -y libgirepository1.0-dev gir1.2-javascriptcoregtk-4.0 libwebkit2gtk-4.0-dev libpoppler-glib-dev libvte-2.91-dev libgtksourceview-3.0-dev libgstreamer-plugins-base1.0-dev libsecret-1-dev libnotify-dev libdbusmenu-gtk3-dev libwnck-3-dev
- - export PATH=$HOME/.cabal/bin:/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:/opt/alex/3.1.7/bin:/opt/happy/1.19.5/bin:$PATH
- - export HASKELL_GI_TYPELIB_SEARCH_PATH=/usr/lib/x86_64-linux-gnu/girepository-1.0
+- "./travis/before_install.sh"
 
 install:
- - cabal --version
- - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
- - travis_retry cabal update
-
-# Here starts the actual work to be performed for the package under test; any command which exits with a non-zero exit code causes the build to fail.
+- travis_retry ./travis/install.sh
 script:
- # The version of Ubuntu in Travis does not have libhandy, libggit or libostree, and and its gtk version is ancient, so many things do not build anymore
- - grep -Ev "(Handy|OSTree|haskell-gi-test|Ggit|webkit-example)" cabal.project > cabal.project.new; mv cabal.project.new cabal.project
- - sed 's/Handy//;s/OSTree//;s/Ggit//;s/Graphene//;s/Gdk-4.0//;s/Gsk//;s/Gtk-4.0//' bindings/PKGS.sh > PKGS.new; mv PKGS.new bindings/PKGS.sh
- - pushd bindings
- - cabal new-run genBuildInfo $(bash PKGS.sh)
- - popd
- - cabal new-build all
- - cabal new-test
+- "./travis/build.sh"
+
+deploy:
+  provider: releases
+  draft: true
+  skip_cleanup: true
+  file_glob: true
+  api_key:
+    secure: RE9TUUtpOvIVEtDg0r9u3Dpa1NH97Opd2B+6T5RMmW85UNWmmA/hctA3HiemhVw2bYzFjW0lQm5JNWhs8iS5m47W+xIkGgzJem5bUapwUlTnjOybvUPETZEp+js2RDr3LjbhRm5nnp1LVxJ8ptFFVBiF03eygiFYvzX5pa7U30sd1dgoOef9xfUtS2z5PNb4LxOV1o/5NE4WNzQJhZonSMGm6ErDp/qYpqKV2DocEAFPOKLI5qagY5R+bcp/x4GmEr2jxyqJ7n7NH1fpXBxgvRgjVgqAnE7PhN/JpD4TT5OaW+Cg8rF0iAYrwT7/9Womly6Cir9F66ADO6W/EA7saaLaqhUXMtcfDpmRc3CbzHoaoB3Xe/1nI78TXqn2LzPXcHkqvSXj+Sp8xO8qt0Bpt8LSh53Nt2JoO7erv/Vqvgq7xSA7zia+9Mw8y62CPI4p45OV1F4ibMK3pjpcESYWX7WLlzTZ7Ia3VcHneM8tdwSOKproLfKqoNah6Lm/aByoAuA7BFvTqIaoMjrJ5722H58/APWtariFVJiwjzhQFeqRdVcSmuEUSAWQnTjj/Z2M4P5zYSI1vtyZ1fCAqVbf6CQI3KmMCw9LIguxaSZrRy+OzrWnhZfa8ZWyHa/bRnqeDHPVFfhRK19MP7xef8L1L/tNjK1TIJHg5537bhoXxQQ=
+  file:
+    - dist-newstyle/sdist/gi-gtkosxapplication-*.tar.gz
+    - dist-newstyle/gi-gtkosxapplication-*-docs.tar.gz
+  on:
+    repo: haskell-gi/haskell-gi
+    tags: true
+    condition: $TRAVIS_OS_NAME = osx
+    condition: $TRAVIS_TAG == gi-gtkosxapplication-*
+
 notifications:
   irc:
-    channels: "irc.freenode.net#gtk2hs"
+    channels: irc.freenode.net#gtk2hs
     skip_join: true
+
 email: true

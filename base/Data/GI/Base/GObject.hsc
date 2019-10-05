@@ -43,12 +43,16 @@ import Data.Proxy (Proxy(..))
 import Data.Coerce (coerce)
 
 import Foreign.C (CUInt(..), CString, newCString)
+#if !MIN_VERSION_base(4,13,0)
 import Foreign.Ptr (FunPtr)
 import Foreign.StablePtr (newStablePtr, deRefStablePtr,
                           castStablePtrToPtr, castPtrToStablePtr)
+#endif
 import Foreign
 
+#if !MIN_VERSION_base(4,11,0)
 import Data.Monoid ((<>))
+#endif
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -104,9 +108,9 @@ constructGObject constructor attrs = liftIO $ do
 -- | Construct the given `GObject`, given a set of actions
 -- constructing desired `GValue`s to set at construction time.
 new' :: (MonadIO m, GObject o) =>
-        (ManagedPtr o -> o) -> [IO (GValueConstruct o)] -> m o
+        (ManagedPtr o -> o) -> [m (GValueConstruct o)] -> m o
 new' constructor actions = do
-  props <- liftIO $ sequence (actions)
+  props <- sequence actions
   doConstructGObject constructor props
 
 -- | Construct the `GObject` given the list of `GValueConstruct`s.

@@ -14,7 +14,9 @@ module Data.GI.CodeGen.ProjectInfo
     , standardDeps
     ) where
 
+#if !MIN_VERSION_base(4,11,0)
 import Data.Monoid ((<>))
+#endif
 import Data.Text (Text)
 import qualified Data.Text as T (unlines)
 
@@ -25,7 +27,7 @@ authors :: Text
 authors = "Will Thompson, Iñaki García Etxebarria and Jonas Platte"
 
 maintainers :: Text
-maintainers = "Iñaki García Etxebarria (inaki@blueleaf.cc)"
+maintainers = "Iñaki García Etxebarria"
 
 license :: Text
 license = "LGPL-2.1"
